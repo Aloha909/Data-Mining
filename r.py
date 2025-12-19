@@ -1,10 +1,14 @@
 import numpy as np
 import pandas as pd
 import streamlit as st
-import folium
-from folium.plugins import MarkerCluster
-from streamlit_folium import st_folium
+import matplotlib
+matplotlib.use("TkAgg")
 
+import matplotlib.pyplot as plt
+import folium
+from streamlit_folium import st_folium
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
 
 
 df = pd.read_csv(
@@ -95,23 +99,73 @@ for col in ["tags", "title", "user"]:
 ##print(df[["lat", "long"]].isna().sum())
 print(df.shape)
 
+df_sc = df[["lat","long"]]
+
+scaler = StandardScaler()
+scaled_data = scaler.fit_transform(df_sc)
+
+print(scaled_data)
+
+scaled_data_df = pd.DataFrame(data=scaled_data, columns=df_sc.columns)
+scaled_data_df.head()
+
+k = 100
+
+kmeans = KMeans(n_clusters=k, init='k-means++')
+
+kmeans.fit(scaled_data_df)
+
+df["cluster"] = (kmeans.labels_)
 
 
 
-n = st.slider("Number of points displayed", 500, 5000, 2000, 500)
-sample = df.sample(n, random_state=42)
+
+# plt.figure()
+# km = []
+# l = []
+
+# for i in range(1, 50):
+#     kmeans = KMeans(n_clusters=i, init='k-means++', n_init=10)
+#     kmeans.fit(scaled_data_df)
+#     km.append(kmeans.inertia_)
+#     l.append(i)
+
+# plt.plot(l, km, marker="o")
+# plt.xlabel("Number of clusters (k)")
+# plt.ylabel("Inertia")
+# plt.title("Elbow method !")
+# plt.show()
+
+##st.pyplot(plt)
+
+
+# model1 = AgglomerativeClustering(
+#     n_clusters=3,
+#     linkage='complete' 
+# )
+
+sample = df.head(50000) 
+
+
+colors = ["red", "blue", "green", "purple", "orange", "darkred", "cadetblue", "black"]
 
 m = folium.Map(
-    location=[sample["lat"].mean(), sample["long"].mean()],
-    zoom_start=12
+    location=[df["lat"].mean(), df["long"].mean()],
+    zoom_start=12,
+    tiles="CartoDB positron"
 )
 
-mc = MarkerCluster().add_to(m)
-
 for _, r in sample.iterrows():
-    folium.Marker(
-        [r["lat"], r["long"]],
-        popup=f"id={r['id']}<br>user={r.get('user','')}"
-    ).add_to(mc)
+    c = int(r["cluster"])
+    color = colors[c % len(colors)]
+
+    folium.CircleMarker(
+        location=[r["lat"], r["long"]],
+        radius=4,          # taille du point
+        color=color,
+        fill=True,
+        fill_color=color,
+        fill_opacity=0.8
+    ).add_to(m)
 
 st_folium(m, width=1000, height=600)
