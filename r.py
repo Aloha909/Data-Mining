@@ -8,7 +8,7 @@ from streamlit_folium import st_folium
 
 
 df = pd.read_csv(
-    r"C:\Users\robin\OneDrive\Documents\robin\4if\Fouille\Data-Mining\flickr_data2.csv"
+    "./flickr_data2.csv"
 )
 print(df.shape)
 
@@ -111,7 +111,7 @@ mc = MarkerCluster().add_to(m)
 for _, r in sample.iterrows():
     folium.Marker(
         [r["lat"], r["long"]],
-        popup=f"id={r['id']}<br>user={r.get('user','')}"
+        popup=f"<a href=\"https://www.flickr.com/photos/{r['user']}/{r['id']}\">{r['title']}</a>"
     ).add_to(mc)
 
 st_folium(m, width=1000, height=600)
