@@ -12,7 +12,7 @@ from sklearn.cluster import KMeans
 
 
 df = pd.read_csv(
-    r"C:\Users\robin\OneDrive\Documents\robin\4if\Fouille\Data-Mining\flickr_data2.csv"
+    "./flickr_data2.csv"
 )
 print(df.shape)
 
