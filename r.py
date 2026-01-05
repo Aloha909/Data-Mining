@@ -202,6 +202,7 @@ results_df = pd.DataFrame(
     results,
     columns=["eps", "min_samples", "silhouette", "n_clusters", "n_noise", "noise_ratio"]
 ).sort_values("silhouette", ascending=False)
+results_df = results_df[ (results_df["n_clusters"] >= 90)]
 
 results_df.head(10)
 
@@ -215,7 +216,12 @@ if len(results_df) > 0:
         labels_best = DBSCAN(eps=best_eps, min_samples=best_ms).fit_predict(X)
         st.write("Clusters (hors bruit):", len(set(labels_best)) - (1 if -1 in labels_best else 0))
         st.write("Noise points:", int((labels_best == -1).sum()))
-        
+
+#0.45000000000000007 8
+# 0.15000000000000002 4
+labels = DBSCAN(eps=best_eps, min_samples=best_ms).fit_predict(X)
+
+
 # cat_df = pd.DataFrame()
 
 # for col in ["lat", "long"]:
@@ -238,7 +244,8 @@ if len(results_df) > 0:
 df_map = df[["lat", "long", "cluster"]].dropna().copy()
 
 df_small = df.iloc[small.index].copy()
-df_small["cluster"] = labels_small
+# df_small["cluster"] = labels_small
+df_small["cluster"] = labels
 
 palette = []
 for i in range(100):
