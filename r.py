@@ -4,11 +4,18 @@ import streamlit as st
 import matplotlib
 matplotlib.use("TkAgg")
 
+import streamlit as st
+import pydeck as pdk
+
 import matplotlib.pyplot as plt
 import folium
 from streamlit_folium import st_folium
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
+
+
+from scipy.cluster.hierarchy import dendrogram, linkage
+from sklearn.cluster import AgglomerativeClustering
 
 
 df = pd.read_csv(
@@ -117,14 +124,26 @@ kmeans.fit(scaled_data_df)
 
 df["cluster"] = (kmeans.labels_)
 
-
-
+model1 = AgglomerativeClustering(
+    n_clusters=100,
+    linkage='complete' 
+)
+model2 = AgglomerativeClustering(
+    n_clusters=100,
+    linkage='average' 
+)
+model3 = AgglomerativeClustering(
+    n_clusters=100,
+    linkage='single' 
+)
+X_small = scaled_data_df.sample(2000, random_state=9)  
+labels_small = model1.fit_predict(X_small)
 
 # plt.figure()
 # km = []
 # l = []
 
-# for i in range(1, 50):
+# for i in range(100, 150):
 #     kmeans = KMeans(n_clusters=i, init='k-means++', n_init=10)
 #     kmeans.fit(scaled_data_df)
 #     km.append(kmeans.inertia_)
@@ -139,33 +158,82 @@ df["cluster"] = (kmeans.labels_)
 ##st.pyplot(plt)
 
 
-# model1 = AgglomerativeClustering(
-#     n_clusters=3,
-#     linkage='complete' 
+
+# sample = df.head(5000) 
+
+
+# colors = ["red", "blue", "green", "purple", "orange", "darkred", "cadetblue", "black"]
+
+# m = folium.Map(
+#     location=[df["lat"].mean(), df["long"].mean()],
+#     zoom_start=12,
+#     tiles="CartoDB positron"
 # )
 
-sample = df.head(50000) 
+# for _, r in sample.iterrows():
+#     c = int(r["cluster"])
+#     color = colors[c % len(colors)]
+
+#     folium.CircleMarker(
+#         location=[r["lat"], r["long"]],
+#         radius=4,          # taille du point
+#         color=color,
+#         fill=True,
+#         fill_color=color,
+#         fill_opacity=0.8
+#     ).add_to(m)
+# st_folium(m, width=1000, height=600)
 
 
-colors = ["red", "blue", "green", "purple", "orange", "darkred", "cadetblue", "black"]
+# cat_df = pd.DataFrame()
 
-m = folium.Map(
-    location=[df["lat"].mean(), df["long"].mean()],
-    zoom_start=12,
-    tiles="CartoDB positron"
+# for col in features:
+#     cat_df[col] = pd.qcut(
+#         data_cleaned[col],
+#         q=3,
+#         labels=["low", "medium", "high"]
+#     )
+# ##cat_df
+
+# binary_df = pd.get_dummies(cat_df)
+
+# binary_df
+
+
+
+df_map = df[["lat", "long", "cluster"]].dropna().copy()
+
+palette = [
+    [255, 0, 0],    
+    [0, 0, 255],     
+    [0, 200, 0],     
+    [160, 32, 240], 
+    [255, 165, 0],   
+    [0, 255, 255],   
+    [255, 0, 255],   
+    [128, 128, 128], 
+    [255, 255, 0],   
+    [0, 128, 128]    
+]
+
+df_map["color"] = df_map["cluster"].apply(
+    lambda c: palette[int(c) % len(palette)] if int(c) >= 0 else [0, 0, 0]
 )
 
-for _, r in sample.iterrows():
-    c = int(r["cluster"])
-    color = colors[c % len(colors)]
+layer = pdk.Layer(
+    "ScatterplotLayer",
+    data=df_map,
+    get_position="[long, lat]",
+    get_fill_color="color",
+    get_radius=25,          
+    pickable=True,
+    opacity=0.7
+)
 
-    folium.CircleMarker(
-        location=[r["lat"], r["long"]],
-        radius=4,          # taille du point
-        color=color,
-        fill=True,
-        fill_color=color,
-        fill_opacity=0.8
-    ).add_to(m)
+view_state = pdk.ViewState(
+    latitude=float(df_map["lat"].mean()),
+    longitude=float(df_map["long"].mean()),
+    zoom=12
+)
 
-st_folium(m, width=1000, height=600)
+st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state))
