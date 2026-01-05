@@ -14,6 +14,7 @@ from sklearn.cluster import KMeans
 df = pd.read_csv(
     "./flickr_data2.csv"
 )
+print("nombre de données initiales :")
 print(df.shape)
 
 print(df.columns.tolist())
@@ -37,6 +38,7 @@ df = df.sort_values(by=["id", "non_na_count"], ascending=[True, False])
 df = df.drop_duplicates(subset=["id"], keep="first")
 df = df.drop(columns=["non_na_count"])
 
+print("Après suppression des id duplicate :")
 print(df.shape)
 
 cols_unnamed = df.columns[df.columns.str.startswith("Unnamed")]
@@ -97,6 +99,7 @@ for col in ["tags", "title", "user"]:
 
 
 ##print(df[["lat", "long"]].isna().sum())
+print("après suppression des colonnes upload et regroupement de taken dans un dataframe + suppression des lignes qui ont des valeurs dans les 3 dernières colonnes :")
 print(df.shape)
 
 df_sc = df[["lat","long"]]
