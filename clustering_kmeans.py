@@ -11,5 +11,5 @@ def kmeans(df, scaled_data_df, k):
 
     df["cluster"] = (kmeans.labels_)
 
-    df_map = df[["lat", "long", "cluster"]].dropna().copy()
+    df_map = df[["lat", "long", "tags", "cluster"]].dropna().copy()
     return df_map

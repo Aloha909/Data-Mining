@@ -1,9 +1,12 @@
+from typing import Any
+
 import nltk
 import pycld2 as cld2
 import numpy as np
 import spacy
 from sentence_transformers import SentenceTransformer
 from time import time
+import pandas as pd
 
 nlp_fr = spacy.load("fr_core_news_sm")
 nlp_en = spacy.load("en_core_web_sm")
@@ -69,9 +72,54 @@ def frequency(tags: list[str]) -> dict[str, float]:
     freq = {}
     for tag in tags:
         freq[tag] = freq.get(tag, 0) + 1
-    for tag in list(freq.keys()):
-        freq[tag] = freq.get(tag, 0) / len(tags)
     return freq
+
+def top_word(df_map : pd.DataFrame) -> dict[int, list[str]]:
+    cluster_tags = {}
+    for _, row in df_map.iterrows():
+        cluster = row["cluster"]
+        tags = row["tags"]
+        if pd.isna(tags):
+            continue
+        tag_list = words_to_list(tags)
+        if cluster not in cluster_tags:
+            cluster_tags[cluster] = []
+        cluster_tags[cluster].extend(tag_list)
+
+    # cluser_tags[cluster] : liste de tous les tags du cluster
+
+    all_tags = []
+
+    for cluster in cluster_tags:
+        cluster_tags[cluster] = remove_common_words(cluster_tags[cluster])
+        cluster_tags[cluster] = lemmatize_batch(cluster_tags[cluster])
+
+        all_tags.extend(unique_tags(cluster_tags[cluster]))
+
+    all_tags_freq = frequency(all_tags)
+    # le extend avec unique puis le frequency donne le nombre de clusters qui ont le tag
+
+    cluster_top_words = {}
+    for cluster in cluster_tags:
+        # on fait TF-IDF
+        tag_freq = frequency(cluster_tags[cluster])
+        tf_idf = {}
+        for tag in tag_freq:
+            tf = tag_freq[tag]
+            idf = np.log(len(cluster_tags) / all_tags_freq.get(tag, 1))
+            tf_idf[tag] = tf * idf
+
+        # print(tf_idf)
+        # print("-----")
+
+        # meilleur tag c'est celui avec le plus grand tf idf
+        # on prend les 3 meilleurs
+
+        sorted_tags = sorted(tf_idf.items(), key=lambda x: x[1], reverse=True)
+        top_tags = [tag for tag, score in sorted_tags[:3]]
+        cluster_top_words[cluster] = top_tags
+
+    return cluster_top_words
 
 
 if __name__ == "__main__":
