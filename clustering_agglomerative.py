@@ -7,17 +7,17 @@ def agglo(df_small, small, linkage):
     match linkage:
         case linkage.COMPLETE:
             model = AgglomerativeClustering(
-                n_clusters=100,
+                n_clusters=300,
                 linkage='complete' 
             )
         case linkage.AVERAGE:
             model = AgglomerativeClustering(
-                n_clusters=100,
+                n_clusters=300,
                 linkage='average' 
             )
         case linkage.SINGLE:
             model = AgglomerativeClustering(
-                n_clusters=100,
+                n_clusters=300,
                 linkage='single' 
             )
 
