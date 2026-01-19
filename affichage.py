@@ -1,4 +1,5 @@
 import pandas as pd
+from text_mining import top_word
 from sklearn.preprocessing import StandardScaler
 from methode import Methode
 from linkage import Linkage
@@ -21,7 +22,7 @@ method_label = st.sidebar.selectbox(
 
 if method_label == "K-Means":
     m = Methode.KMEANS
-    k = st.sidebar.slider("Nombre de clusters (k)", 10, 1000, 100)
+    k = st.sidebar.slider("Nombre de clusters (k)", 10, 1000, 100, 10)
     data = st.sidebar.selectbox("Taille du dataset : ", ("Reduit", "Entier"))
 elif method_label == "Agglomerative":
     linkage_str = st.sidebar.selectbox("Type de linkage", ("Complete", "Average", "Single"))
@@ -32,9 +33,11 @@ elif method_label == "Agglomerative":
             l = Linkage.AVERAGE
         case "Single":
             l = Linkage.SINGLE
+    nb_clust_agglo = st.sidebar.slider("Nombre de clusters", 10, 1000, 100, 10)
     m = Methode.AGGLO
 else:
-    eps = st.sidebar.slider("EPS, distance minimal (*10^-4)", 1,200,160) * 10**-4
+    dist_metre = st.sidebar.slider("Distance minimale en mètres", 1,200,5)
+    eps = dist_metre
     min_sample = st.sidebar.slider("Minimum sample", 1, 20, 2)
     m = Methode.DBSCAN
     
@@ -44,25 +47,26 @@ df = pd.read_csv(
 )
 df_sc = df[["lat","long"]]
 
-scaler = StandardScaler()
-scaled_data = scaler.fit_transform(df_sc)
+data_df = pd.DataFrame(data=df_sc, columns=df_sc.columns)
+data_df.head()
 
-scaled_data_df = pd.DataFrame(data=scaled_data, columns=df_sc.columns)
-scaled_data_df.head()
-
-small = scaled_data_df.sample(5000, random_state=9)
+small = data_df.sample(5000, random_state=9)
 df_small = df.iloc[small.index].copy()
 
 match m:
     case Methode.KMEANS:
         if data == "Reduit":
             df_map = clustering_kmeans.kmeans(df_small, small, k)
+            cluster_tags = top_word(df_map)
         elif data == "Entier":
-            df_map = clustering_kmeans.kmeans(df, scaled_data_df, k)
+            df_map = clustering_kmeans.kmeans(df, data_df, k)
+            cluster_tags = top_word(df_map)
     case Methode.AGGLO:
-        df_map = clustering_agglomerative.agglo(df_small, small, l)
+        df_map = clustering_agglomerative.agglo(df_small, small, l, nb_clust_agglo)
+        cluster_tags = top_word(df_map)
     case Methode.DBSCAN:
         df_map = clustering_dbscan.dbscan(df_small, small, eps, min_sample)
+        cluster_tags = top_word(df_map)
     case _:
         print("erreur")
     
@@ -84,6 +88,10 @@ df_map["color"] = df_map["cluster"].apply(
     lambda c: palette[int(c) % len(palette)] if int(c) >= 0 else [0, 0, 0]
 )
 
+df_map["top_tags"] = df_map["cluster"].apply(
+    lambda c: ", ".join(cluster_tags[c]) if c in cluster_tags else ""
+)
+
 layer = pdk.Layer(
     "ScatterplotLayer",
     data=df_map,
@@ -100,4 +108,4 @@ view_state = pdk.ViewState(
     zoom=12
 )
 
-st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state))
+st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state, tooltip={"text": "{top_tags}"}))
