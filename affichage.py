@@ -1,6 +1,7 @@
 import pandas as pd
-from sklearn.discriminant_analysis import StandardScaler
+from sklearn.preprocessing import StandardScaler
 from methode import Methode
+from linkage import Linkage
 import clustering_kmeans
 import clustering_agglomerative
 import clustering_dbscan
@@ -8,8 +9,35 @@ import clustering_dbscan
 import streamlit as st
 import pydeck as pdk
 
-m = Methode.AGGLO
-k = 100
+m = Methode.KMEANS
+l = Linkage.COMPLETE
+k = 300
+
+st.sidebar.header("Paramètres")
+method_label = st.sidebar.selectbox(
+    "Méthode de clustering",
+    ("Agglomerative", "K-Means", "DBSCAN")
+)
+
+if method_label == "K-Means":
+    m = Methode.KMEANS
+    k = st.sidebar.slider("Nombre de clusters (k)", 10, 1000, 100)
+    data = st.sidebar.selectbox("Taille du dataset : ", ("Reduit", "Entier"))
+elif method_label == "Agglomerative":
+    linkage_str = st.sidebar.selectbox("Type de linkage", ("Complete", "Average", "Single"))
+    match linkage_str:
+        case "Complete":
+            l = Linkage.COMPLETE
+        case "Average":
+            l = Linkage.AVERAGE
+        case "Single":
+            l = Linkage.SINGLE
+    m = Methode.AGGLO
+else:
+    eps = st.sidebar.slider("EPS, distance minimal (*10^-4)", 1,200,160) * 10**-4
+    min_sample = st.sidebar.slider("Minimum sample", 1, 20, 2)
+    m = Methode.DBSCAN
+    
 
 df = pd.read_csv(
     "./data_clean.csv"
@@ -27,15 +55,17 @@ df_small = df.iloc[small.index].copy()
 
 match m:
     case Methode.KMEANS:
-        df_map = clustering_kmeans.kmeans(df, scaled_data_df, k)
+        if data == "Reduit":
+            df_map = clustering_kmeans.kmeans(df_small, small, k)
+        elif data == "Entier":
+            df_map = clustering_kmeans.kmeans(df, scaled_data_df, k)
     case Methode.AGGLO:
-        df_map = clustering_agglomerative.agglo(df_small, small)
+        df_map = clustering_agglomerative.agglo(df_small, small, l)
     case Methode.DBSCAN:
-        df_map = clustering_dbscan.dbscan(df_small, small)
+        df_map = clustering_dbscan.dbscan(df_small, small, eps, min_sample)
     case _:
         print("erreur")
-        
-
+    
 
 palette = [
     [255, 0, 0],    
