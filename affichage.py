@@ -1,5 +1,4 @@
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
 from methode import Methode
 from linkage import Linkage
 import clustering_kmeans
@@ -36,7 +35,7 @@ elif method_label == "Agglomerative":
     m = Methode.AGGLO
 else:
     dist_metre = st.sidebar.slider("Distance minimale en mètres", 1,200,5)
-    eps = dist_metre
+    eps = dist_metre / 6384415.0
     min_sample = st.sidebar.slider("Minimum sample", 1, 20, 2)
     m = Methode.DBSCAN
     
@@ -49,7 +48,7 @@ df_sc = df[["lat","long"]]
 data_df = pd.DataFrame(data=df_sc, columns=df_sc.columns)
 data_df.head()
 
-small = data_df.sample(5000, random_state=9)
+small = data_df.sample(10000, random_state=9)
 df_small = df.iloc[small.index].copy()
 
 match m:
