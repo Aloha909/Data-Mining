@@ -1,4 +1,6 @@
 import pandas as pd
+from text_mining import top_word
+from sklearn.preprocessing import StandardScaler
 from methode import Methode
 from linkage import Linkage
 import clustering_kmeans
@@ -55,12 +57,16 @@ match m:
     case Methode.KMEANS:
         if data == "Reduit":
             df_map = clustering_kmeans.kmeans(df_small, small, k)
+            cluster_tags = top_word(df_map)
         elif data == "Entier":
             df_map = clustering_kmeans.kmeans(df, data_df, k)
+            cluster_tags = top_word(df_map)
     case Methode.AGGLO:
         df_map = clustering_agglomerative.agglo(df_small, small, l, nb_clust_agglo)
+        cluster_tags = top_word(df_map)
     case Methode.DBSCAN:
         df_map = clustering_dbscan.dbscan(df_small, small, eps, min_sample)
+        cluster_tags = top_word(df_map)
     case _:
         print("erreur")
     
@@ -82,6 +88,10 @@ df_map["color"] = df_map["cluster"].apply(
     lambda c: palette[int(c) % len(palette)] if int(c) >= 0 else [0, 0, 0]
 )
 
+df_map["top_tags"] = df_map["cluster"].apply(
+    lambda c: ", ".join(cluster_tags[c]) if c in cluster_tags else ""
+)
+
 layer = pdk.Layer(
     "ScatterplotLayer",
     data=df_map,
@@ -98,4 +108,4 @@ view_state = pdk.ViewState(
     zoom=12
 )
 
-st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state))
+st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state, tooltip={"text": "{top_tags}"}))
