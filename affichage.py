@@ -20,9 +20,13 @@ method_label = st.sidebar.selectbox(
     ("Agglomerative", "K-Means", "DBSCAN")
 )
 
+
+
+
+
 if method_label == "K-Means":
     m = Methode.KMEANS
-    k = st.sidebar.slider("Nombre de clusters (k)", 10, 1000, 100, 10)
+    k = st.sidebar.slider("Nombre de clusters (k)", 1, 1000, 100, 10)
     data = st.sidebar.selectbox("Taille du dataset : ", ("Reduit", "Entier"))
 elif method_label == "Agglomerative":
     linkage_str = st.sidebar.selectbox("Type de linkage", ("Complete", "Average", "Single"))
@@ -33,7 +37,7 @@ elif method_label == "Agglomerative":
             l = Linkage.AVERAGE
         case "Single":
             l = Linkage.SINGLE
-    nb_clust_agglo = st.sidebar.slider("Nombre de clusters", 10, 1000, 100, 10)
+    nb_clust_agglo = st.sidebar.slider("Nombre de clusters", 1, 1000, 100, 10)
     m = Methode.AGGLO
 else:
     dist_metre = st.sidebar.slider("Distance minimale en mètres", 1,200,5)
@@ -45,13 +49,32 @@ else:
 df = pd.read_csv(
     "./data_clean.csv"
 )
+df["date_taken"] = pd.to_datetime(df["date_taken"], errors="coerce")
+
+min_year = int(df["date_taken"].dt.year.min())
+max_year = int(df["date_taken"].dt.year.max())
+
+start_year, end_year = st.slider(
+    "Year range",
+    min_value=min_year,
+    max_value=max_year,
+    value=(2005, 2010),
+    step=1
+)
+
+df = df[
+    (df["date_taken"].dt.year >= start_year) &
+    (df["date_taken"].dt.year <= end_year)
+]
+
 df_sc = df[["lat","long"]]
 
 data_df = pd.DataFrame(data=df_sc, columns=df_sc.columns)
 data_df.head()
 
-small = data_df.sample(5000, random_state=9)
-df_small = df.iloc[small.index].copy()
+n = min(5000, len(data_df))
+small = data_df.sample(n, random_state=9)
+df_small = df.loc[small.index].copy()
 
 match m:
     case Methode.KMEANS:
@@ -69,43 +92,44 @@ match m:
         cluster_tags = top_word(df_map)
     case _:
         print("erreur")
-    
+if (len(df_map) == 0):
+    st.info("Pas assez de données disponible pour ce nombre de clusters.")
+else:
+    palette = [
+        [255, 0, 0],    
+        [0, 0, 255],     
+        [0, 200, 0],     
+        [160, 32, 240], 
+        [255, 165, 0],   
+        [0, 255, 255],   
+        [255, 0, 255],   
+        [128, 128, 128], 
+        [255, 255, 0],   
+        [0, 128, 128]    
+    ]
 
-palette = [
-    [255, 0, 0],    
-    [0, 0, 255],     
-    [0, 200, 0],     
-    [160, 32, 240], 
-    [255, 165, 0],   
-    [0, 255, 255],   
-    [255, 0, 255],   
-    [128, 128, 128], 
-    [255, 255, 0],   
-    [0, 128, 128]    
-]
+    df_map["color"] = df_map["cluster"].apply(
+        lambda c: palette[int(c) % len(palette)] if int(c) >= 0 else [0, 0, 0]
+    )
 
-df_map["color"] = df_map["cluster"].apply(
-    lambda c: palette[int(c) % len(palette)] if int(c) >= 0 else [0, 0, 0]
-)
+    df_map["top_tags"] = df_map["cluster"].apply(
+        lambda c: ", ".join(cluster_tags[c]) if c in cluster_tags else ""
+    )
 
-df_map["top_tags"] = df_map["cluster"].apply(
-    lambda c: ", ".join(cluster_tags[c]) if c in cluster_tags else ""
-)
+    layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=df_map,
+        get_position="[long, lat]",
+        get_fill_color="color",
+        get_radius=25,          
+        pickable=True,
+        opacity=0.7
+    )
 
-layer = pdk.Layer(
-    "ScatterplotLayer",
-    data=df_map,
-    get_position="[long, lat]",
-    get_fill_color="color",
-    get_radius=25,          
-    pickable=True,
-    opacity=0.7
-)
+    view_state = pdk.ViewState(
+        latitude=float(df_map["lat"].mean()),
+        longitude=float(df_map["long"].mean()),
+        zoom=12
+    )
 
-view_state = pdk.ViewState(
-    latitude=float(df_map["lat"].mean()),
-    longitude=float(df_map["long"].mean()),
-    zoom=12
-)
-
-st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state, tooltip={"text": "{top_tags}"}))
+    st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state, tooltip={"text": "{top_tags}"}))

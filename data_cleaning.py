@@ -55,6 +55,7 @@ cols = [
     "date_taken_minute"
 ]
 
+df = df.loc[df["date_taken_year"] < 2026, :]
 df[cols] = df[cols].apply(pd.to_numeric, errors="coerce")
 
 df["date_taken"] = pd.to_datetime(
