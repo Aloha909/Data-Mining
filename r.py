@@ -1,15 +1,29 @@
 import numpy as np
 import pandas as pd
 import streamlit as st
+import matplotlib
+matplotlib.use("TkAgg")
+
+import streamlit as st
+import pydeck as pdk
+
+import matplotlib.pyplot as plt
 import folium
-from folium.plugins import MarkerCluster
 from streamlit_folium import st_folium
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
 
 
+from scipy.cluster.hierarchy import dendrogram, linkage
+from sklearn.cluster import AgglomerativeClustering
+
+from sklearn.cluster import DBSCAN
+from sklearn.metrics import silhouette_score
 
 df = pd.read_csv(
-    r"C:\Users\robin\OneDrive\Documents\robin\4if\Fouille\Data-Mining\flickr_data2.csv"
+    "./flickr_data2.csv"
 )
+print("nombre de données initiales :")
 print(df.shape)
 
 print(df.columns.tolist())
@@ -33,6 +47,7 @@ df = df.sort_values(by=["id", "non_na_count"], ascending=[True, False])
 df = df.drop_duplicates(subset=["id"], keep="first")
 df = df.drop(columns=["non_na_count"])
 
+print("Après suppression des id duplicate :")
 print(df.shape)
 
 cols_unnamed = df.columns[df.columns.str.startswith("Unnamed")]
@@ -93,25 +108,212 @@ for col in ["tags", "title", "user"]:
 
 
 ##print(df[["lat", "long"]].isna().sum())
+print("après suppression des colonnes upload et regroupement de taken dans un dataframe + suppression des lignes qui ont des valeurs dans les 3 dernières colonnes :")
 print(df.shape)
 
+df_sc = df[["lat","long"]]
+
+scaler = StandardScaler()
+scaled_data = scaler.fit_transform(df_sc)
+
+print(scaled_data)
+
+scaled_data_df = pd.DataFrame(data=scaled_data, columns=df_sc.columns)
+scaled_data_df.head()
+
+small = scaled_data_df.sample(5000, random_state=9)  
 
 
 
-n = st.slider("Number of points displayed", 500, 5000, 2000, 500)
-sample = df.sample(n, random_state=42)
+k = 100
 
-m = folium.Map(
-    location=[sample["lat"].mean(), sample["long"].mean()],
-    zoom_start=12
+kmeans = KMeans(n_clusters=k, init='k-means++')
+
+kmeans.fit(scaled_data_df)
+
+df["cluster"] = (kmeans.labels_)
+
+model1 = AgglomerativeClustering(
+    n_clusters=100,
+    linkage='complete' 
+)
+model2 = AgglomerativeClustering(
+    n_clusters=100,
+    linkage='average' 
+)
+model3 = AgglomerativeClustering(
+    n_clusters=100,
+    linkage='single' 
 )
 
-mc = MarkerCluster().add_to(m)
+labels_small = model1.fit_predict(small)
+#plt.figure()
+km = []
+l = []
 
-for _, r in sample.iterrows():
-    folium.Marker(
-        [r["lat"], r["long"]],
-        popup=f"id={r['id']}<br>user={r.get('user','')}"
-    ).add_to(mc)
+# for i in range(2, 100):
+#     kmeans = KMeans(n_clusters=i*2, init='k-means++')
+#     kmeans.fit(scaled_data_df)
+#     km.append(kmeans.inertia_)
+#     l.append(i*2)
 
-st_folium(m, width=1000, height=600)
+# plt.plot(l, km, marker="o")
+# plt.xlabel("Number of clusters (k)")
+# plt.ylabel("Inertia")
+# plt.title("Elbow method")
+# #plt.show()
+
+# st.pyplot(plt)
+
+print("salut")
+
+# DBSCAN
+
+
+X = small.to_numpy()  
+
+eps_values = np.arange(0.1, 0.81, 0.05)   
+min_samples_values = range(3, 9)
+
+results = []
+
+for eps in eps_values:
+    for ms in min_samples_values:
+        labels = DBSCAN(eps=eps, min_samples=ms).fit_predict(X)
+
+        # enlever le bruit
+        mask = labels != -1
+
+        # si trop peu de points gardés, ou un seul cluster => pas de silhouette possible
+        if mask.sum() < 10:
+            continue
+
+        n_clusters = len(set(labels[mask]))
+        if n_clusters < 2:
+            continue
+
+        sil = silhouette_score(X[mask], labels[mask])
+
+        n_noise = (labels == -1).sum()
+
+        results.append([eps, ms, sil, n_clusters, n_noise, n_noise / len(labels)])
+
+results_df = pd.DataFrame(
+    results,
+    columns=["eps", "min_samples", "silhouette", "n_clusters", "n_noise", "noise_ratio"]
+).sort_values("silhouette", ascending=False)
+results_df = results_df[ (results_df["n_clusters"] >= 90)]
+
+results_df.head(10)
+
+if len(results_df) > 0:
+        best = results_df.iloc[0]
+        best_eps = float(best["eps"])
+        best_ms = int(best["min_samples"])
+
+        st.write("Best params:", best_eps, best_ms)
+
+        labels_best = DBSCAN(eps=best_eps, min_samples=best_ms).fit_predict(X)
+        st.write("Clusters (hors bruit):", len(set(labels_best)) - (1 if -1 in labels_best else 0))
+        st.write("Noise points:", int((labels_best == -1).sum()))
+
+#0.45000000000000007 8
+# 0.15000000000000002 4
+labels = DBSCAN(eps=best_eps, min_samples=best_ms).fit_predict(X)
+
+
+# cat_df = pd.DataFrame()
+
+# for col in ["lat", "long"]:
+#     cat_df[col] = pd.qcut(
+#         df[col],
+#         q=100
+#         )
+#cat_df
+
+
+
+
+#binary_df = pd.get_dummies(cat_df)
+
+
+
+
+
+
+df_map = df[["lat", "long", "cluster"]].dropna().copy()
+
+df_small = df.iloc[small.index].copy()
+# df_small["cluster"] = labels_small
+df_small["cluster"] = labels
+
+palette = []
+for i in range(100):
+    r = (50 + i * 40) % 256
+    g = (100 + i * 70) % 256
+    b = (150 + i * 90) % 256
+    palette.append([r, g, b])
+
+# palette = [
+#     [255, 0, 0],    
+#     [0, 0, 255],     
+#     [0, 200, 0],     
+#     [160, 32, 240], 
+#     [255, 165, 0],   
+#     [0, 255, 255],   
+#     [255, 0, 255],   
+#     [128, 128, 128], 
+#     [255, 255, 0],   
+#     [0, 128, 128]    
+# ]
+
+
+
+df_map["color"] = df_map["cluster"].apply(
+    lambda c: palette[int(c) % len(palette)] if int(c) >= 0 else [0, 0, 0]
+)
+
+df_small["color"] = df_small["cluster"].apply(
+    lambda c: palette[int(c) % len(palette)] if int(c) >= 0 else [0, 0, 0]
+)
+
+
+
+layer = pdk.Layer(
+    "ScatterplotLayer",
+    data=df_small,
+    get_position="[long, lat]",
+    get_fill_color="color",
+    get_radius=25,          
+    pickable=True,
+    opacity=0.7
+)
+
+view_state = pdk.ViewState(
+    latitude=float(df_small["lat"].mean()),
+    longitude=float(df_small["long"].mean()),
+    zoom=12
+)
+
+st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state))
+
+
+
+
+# layer = pdk.Layer(
+#     "ScatterplotLayer",
+#     data=df_map,
+#     get_position="[long, lat]",
+#     get_fill_color="color",
+#     get_radius=25,          
+#     pickable=True,
+#     opacity=0.7
+# )
+
+# view_state = pdk.ViewState(
+#     latitude=float(df_map["lat"].mean()),
+#     longitude=float(df_map["long"].mean()),
+#     zoom=12
+# )
+
+#st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state))
