@@ -1,6 +1,5 @@
 import pandas as pd
 from text_mining import top_word
-from sklearn.preprocessing import StandardScaler
 from methode import Methode
 from linkage import Linkage
 import clustering_kmeans
@@ -36,11 +35,12 @@ elif method_label == "Agglomerative":
     nb_clust_agglo = st.sidebar.slider("Nombre de clusters", 10, 1000, 100, 10)
     m = Methode.AGGLO
 else:
-    dist_metre = st.sidebar.slider("Distance minimale en mètres", 1,200,5)
+    dist_metre = st.sidebar.slider("Distance minimale en mètres", 1,100,5)
     eps = dist_metre / 6384415.0
     min_sample = st.sidebar.slider("Minimum sample", 1, 20, 2)
     m = Methode.DBSCAN
     
+calcul_tags = st.toggle('Calculer les tags', value=True)
 
 df = pd.read_csv(
     "./data_clean.csv"
@@ -56,20 +56,18 @@ df_small = df.iloc[small.index].copy()
 match m:
     case Methode.KMEANS:
         if data == "Reduit":
-            df_map = clustering_kmeans.kmeans(df_small, small, k)
-            cluster_tags = top_word(df_map)
+            df_map = clustering_kmeans.kmeans(df_small, small, k)   
         elif data == "Entier":
             df_map = clustering_kmeans.kmeans(df, data_df, k)
-            cluster_tags = top_word(df_map)
     case Methode.AGGLO:
         df_map = clustering_agglomerative.agglo(df_small, small, l, nb_clust_agglo)
-        cluster_tags = top_word(df_map)
     case Methode.DBSCAN:
         df_map = clustering_dbscan.dbscan(df_small, small, eps, min_sample)
-        cluster_tags = top_word(df_map)
     case _:
         print("erreur")
-    
+
+if (not(df_map.empty) and calcul_tags):
+    cluster_tags = top_word(df_map)
 
 palette = [
     [255, 0, 0],    
@@ -87,10 +85,10 @@ palette = [
 df_map["color"] = df_map["cluster"].apply(
     lambda c: palette[int(c) % len(palette)] if int(c) >= 0 else [0, 0, 0]
 )
-
-df_map["top_tags"] = df_map["cluster"].apply(
-    lambda c: ", ".join(cluster_tags[c]) if c in cluster_tags else ""
-)
+if calcul_tags:
+    df_map["top_tags"] = df_map["cluster"].apply(
+        lambda c: ", ".join(cluster_tags[c]) if c in cluster_tags else ""
+    )
 
 layer = pdk.Layer(
     "ScatterplotLayer",

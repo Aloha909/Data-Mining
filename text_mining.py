@@ -1,10 +1,8 @@
 from typing import Any
 
-import nltk
 import pycld2 as cld2
 import numpy as np
 import spacy
-from sentence_transformers import SentenceTransformer
 from time import time
 import pandas as pd
 
