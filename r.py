@@ -172,11 +172,11 @@ l = []
 
 X = small.to_numpy()  
 
-eps_values = np.arange(0.01, 1, 0.05)
-min_samples_values = range(3, 6)
+eps_values = np.arange(0.0001, 0.002, 0.00005)
+min_samples_values = range(1,2)
 
 
-results = []
+# results = []
 
 # for eps in eps_values:
 #     for ms in min_samples_values:
@@ -222,7 +222,7 @@ results = []
 # # 0.15000000000000002 4
 # labels = DBSCAN(eps=best_eps, min_samples=best_ms).fit_predict(X)
 
-labels = DBSCAN(eps=0.020000, min_samples=2).fit_predict(X)
+labels = DBSCAN(eps=0.0160000, min_samples=2).fit_predict(X)
 # cat_df = pd.DataFrame()
 
 # for col in ["lat", "long"]:
@@ -270,40 +270,19 @@ for i in range(100):
 
 
 
-df_map["color"] = df_map["cluster"].apply(
-    lambda c: palette[int(c) % len(palette)] if int(c) >= 0 else [0, 0, 0]
-)
+# df_map["color"] = df_map["cluster"].apply(
+#     lambda c: palette[int(c) % len(palette)] if int(c) >= 0 else [0, 0, 0]
+# )
 
-df_small["color"] = df_small["cluster"].apply(
-    lambda c: palette[int(c) % len(palette)] if int(c) >= 0 else [0, 0, 0]
-)
-
-
-
-layer = pdk.Layer(
-    "ScatterplotLayer",
-    data=df_small,
-    get_position="[long, lat]",
-    get_fill_color="color",
-    get_radius=25,          
-    pickable=True,
-    opacity=0.7
-)
-
-view_state = pdk.ViewState(
-    latitude=float(df_small["lat"].mean()),
-    longitude=float(df_small["long"].mean()),
-    zoom=12
-)
-
-st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state))
-
+# df_small["color"] = df_small["cluster"].apply(
+#     lambda c: palette[int(c) % len(palette)] if int(c) >= 0 else [0, 0, 0]
+# )
 
 
 
 # layer = pdk.Layer(
 #     "ScatterplotLayer",
-#     data=df_map,
+#     data=df_small,
 #     get_position="[long, lat]",
 #     get_fill_color="color",
 #     get_radius=25,          
@@ -312,9 +291,90 @@ st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state))
 # )
 
 # view_state = pdk.ViewState(
-#     latitude=float(df_map["lat"].mean()),
-#     longitude=float(df_map["long"].mean()),
+#     latitude=float(df_small["lat"].mean()),
+#     longitude=float(df_small["long"].mean()),
 #     zoom=12
 # )
 
-#st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state))
+# st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state))
+
+photos_per_month = (
+    df_small
+    .groupby(df["date_taken"].dt.to_period("M"))
+    .size()
+    .reset_index(name="count")
+)
+
+photos_per_month["date_taken"] = photos_per_month["date_taken"].dt.to_timestamp()
+
+fig, ax = plt.subplots(figsize=(10, 4))
+
+ax.plot(
+    photos_per_month["date_taken"],
+    photos_per_month["count"],
+    linewidth=2
+)
+
+ax.set_title("Number of photos over time")
+ax.set_xlabel("Date")
+ax.set_ylabel("Number of photos")
+
+plt.tight_layout()
+st.pyplot(fig)
+
+
+# # bornes
+# min_d = df_small["date_taken"].min().date()
+# max_d = df_small["date_taken"].max().date()
+
+# start, end = st.date_input("Date range", value=(min_d, max_d), min_value=min_d, max_value=max_d)
+
+# df_t = df_small[(df_small["date_taken"].dt.date >= start) & (df_small["date_taken"].dt.date <= end)]
+
+# st.write("Points in range:", len(df_t))
+
+# # échantillon si trop gros
+# max_points = 50000
+# if len(df_t) > max_points:
+#     df_t = df_t.sample(max_points, random_state=42)
+
+# layer = pdk.Layer(
+#     "ScatterplotLayer",
+#     data=df_t,
+#     get_position="[long, lat]",
+#     get_radius=25,
+#     opacity=0.6,
+#     pickable=True
+# )
+
+# view_state = pdk.ViewState(
+#     latitude=float(df_t["lat"].mean()),
+#     longitude=float(df_t["long"].mean()),
+#     zoom=12
+# )
+
+# st.pydeck_chart(pdk.Deck(
+#     layers=[layer],
+#     initial_view_state=view_state,
+#     tooltip={"text": "date: {date_taken}\nid: {id}"}
+# ))
+
+
+
+# # layer = pdk.Layer(
+# #     "ScatterplotLayer",
+# #     data=df_map,
+# #     get_position="[long, lat]",
+# #     get_fill_color="color",
+# #     get_radius=25,          
+# #     pickable=True,
+# #     opacity=0.7
+# # )
+
+# # view_state = pdk.ViewState(
+# #     latitude=float(df_map["lat"].mean()),
+# #     longitude=float(df_map["long"].mean()),
+# #     zoom=12
+# # )
+
+# #st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state))
