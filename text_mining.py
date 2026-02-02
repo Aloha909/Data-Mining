@@ -61,7 +61,7 @@ def ner_sentence(text: str) -> list[str]:
     else:
         doc = nlp_en(text)
 
-    entities = [ent.text for ent in doc.ents]
+    entities = [ent.text for ent in doc.ents if ent.label_ in {"ORG", "GPE", "LOC", "EVENT", "FAC"}] # organisation, entite geopolotique, lieu, evenement, batiment
     return entities
 
 def calcul_log_odds(cluster_entities: dict[int, list[str]], nb_words: int) -> dict[int, list[str]]:
