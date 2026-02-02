@@ -1,6 +1,3 @@
-
-
-
 import pycld2 as cld2
 import numpy as np
 import spacy
@@ -21,17 +18,6 @@ def remove_common_words(tags: list[str]) -> list[str]:
 
 def unique_tags(tags: list[str]) -> list[str]:
     unique_tags = list(dict.fromkeys(tags))
-    # # on enleve les doublons qui sont une variation d'un autre tag avec nltk
-    # filtered_tags = []
-    # for tag in unique_tags:
-    #     is_similar = False
-    #     for other_tag in filtered_tags:
-    #         if nltk.edit_distance(tag, other_tag) <= 1:
-    #             is_similar = True
-    #             break
-    #     if not is_similar:
-    #         filtered_tags.append(tag)
-    # unique_tags = filtered_tags
     return unique_tags
 
 def detect_language(text: str) -> str:
@@ -39,11 +25,6 @@ def detect_language(text: str) -> str:
     language = details[0][1] if is_reliable else "fr"
     return language
 
-# def lemmatize(word: str):
-#     w = word.strip()
-#     lang = detect_language(w)
-#     doc = (nlp_fr if lang == "fr" else nlp_en)(w)
-#     return doc[0].lemma_.lower()
 
 def lemmatize_batch(words: list[str]):
     norm = [w.strip() for w in words if w and w.strip()]
@@ -73,7 +54,52 @@ def frequency(tags: list[str]) -> dict[str, float]:
         freq[tag] = freq.get(tag, 0) + 1
     return freq
 
-def top_word(df_map : pd.DataFrame) -> dict[int, list[str]]:
+def ner_sentence(text: str) -> list[str]:
+    lang = detect_language(text)
+    if lang == "fr":
+        doc = nlp_fr(text)
+    else:
+        doc = nlp_en(text)
+
+    entities = [ent.text for ent in doc.ents]
+    return entities
+
+def calcul_log_odds(cluster_entities: dict[int, list[str]], nb_words: int) -> dict[int, list[str]]:
+    # Compte total (tous clusters)
+    all_entities = []
+    for entities in cluster_entities.values():
+        all_entities.extend(entities)
+
+    total_count = len(all_entities)
+    global_freq = frequency(all_entities)
+
+    cluster_top_words = {}
+
+    for cluster, entities in cluster_entities.items():
+        if not entities:
+            cluster_top_words[cluster] = []
+            continue
+
+        cluster_freq = frequency(entities)
+        cluster_total = len(entities)
+        other_total = total_count - cluster_total
+
+        log_odds = {}
+        for entity, count in cluster_freq.items():
+            p_cluster = (count + 0.5) / (cluster_total + 1)
+
+            # Fréquence dans les autres clusters
+            other_count = global_freq[entity] - count
+            p_other = (other_count + 0.5) / (other_total + 1)
+
+            log_odds[entity] = np.log(p_cluster / p_other)
+
+        sorted_entities = sorted(log_odds.items(), key=lambda x: x[1], reverse=True)
+        cluster_top_words[cluster] = [ent for ent, _ in sorted_entities[:nb_words]]
+
+    return cluster_top_words
+
+def top_words(df_map : pd.DataFrame, text_mining_method, nb_words: int = 3) -> dict[int, list[str]]:
     cluster_tags = {}
     for _, row in df_map.iterrows():
         cluster = row["cluster"]
@@ -87,38 +113,51 @@ def top_word(df_map : pd.DataFrame) -> dict[int, list[str]]:
 
     # cluser_tags[cluster] : liste de tous les tags du cluster
 
-    all_tags = []
+    if text_mining_method == "Lemmatisation + TF-IDF":
 
-    for cluster in cluster_tags:
-        cluster_tags[cluster] = remove_common_words(cluster_tags[cluster])
-        cluster_tags[cluster] = lemmatize_batch(cluster_tags[cluster])
+        all_tags = []
+        for cluster in cluster_tags:
+            cluster_tags[cluster] = remove_common_words(cluster_tags[cluster])
+            cluster_tags[cluster] = lemmatize_batch(cluster_tags[cluster])
 
-        all_tags.extend(unique_tags(cluster_tags[cluster]))
+            all_tags.extend(unique_tags(cluster_tags[cluster]))
 
-    all_tags_freq = frequency(all_tags)
-    # le extend avec unique puis le frequency donne le nombre de clusters qui ont le tag
+        all_tags_freq = frequency(all_tags)
+        # le extend avec unique puis le frequency donne le nombre de clusters qui ont le tag
 
-    cluster_top_words = {}
-    for cluster in cluster_tags:
-        # on fait TF-IDF
-        tag_freq = frequency(cluster_tags[cluster])
-        tf_idf = {}
-        for tag in tag_freq:
-            tf = tag_freq[tag]
-            idf = np.log(len(cluster_tags) / all_tags_freq.get(tag, 1))
-            tf_idf[tag] = tf * idf
+        cluster_top_words = {}
+        for cluster in cluster_tags:
+            # on fait TF-IDF
+            tag_freq = frequency(cluster_tags[cluster])
+            tf_idf = {}
+            for tag in tag_freq:
+                tf = tag_freq[tag]
+                idf = np.log(len(cluster_tags) / all_tags_freq.get(tag, 1))
+                tf_idf[tag] = tf * idf
 
-        # print(tf_idf)
-        # print("-----")
+            # print(tf_idf)
+            # print("-----")
 
-        # meilleur tag c'est celui avec le plus grand tf idf
-        # on prend les 3 meilleurs
+            # meilleur tag c'est celui avec le plus grand tf idf
+            # on prend les 3 meilleurs
 
-        sorted_tags = sorted(tf_idf.items(), key=lambda x: x[1], reverse=True)
-        top_tags = [tag for tag, score in sorted_tags[:3]]
-        cluster_top_words[cluster] = top_tags
+            sorted_tags = sorted(tf_idf.items(), key=lambda x: x[1], reverse=True)
+            top_tags = [tag for tag, score in sorted_tags[:nb_words]]
+            cluster_top_words[cluster] = top_tags
 
-    return cluster_top_words
+        return cluster_top_words
+
+    elif text_mining_method == "NER + log-odds":
+        cluster_entities = {}
+        for cluster in cluster_tags:
+            cluster_tags[cluster] = remove_common_words(cluster_tags[cluster])
+            concat = " ".join(cluster_tags[cluster])
+            entities = ner_sentence(concat)
+            cluster_entities[cluster] = entities
+
+        cluster_top_words = calcul_log_odds(cluster_entities, nb_words)
+
+        return cluster_top_words
 
 
 if __name__ == "__main__":

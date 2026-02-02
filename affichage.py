@@ -1,5 +1,6 @@
 import pandas as pd
-from text_mining import top_word
+from text_mining import top_words
+from sklearn.preprocessing import StandardScaler
 from methode import Methode
 from linkage import Linkage
 import clustering_kmeans
@@ -19,9 +20,10 @@ method_label = st.sidebar.selectbox(
     ("Agglomerative", "K-Means", "DBSCAN")
 )
 
-
-
-
+text_mining_method_label = st.sidebar.selectbox(
+    "Méthode de text mining",
+    ("Lemmatisation + TF-IDF", "NER + log-odds")
+)
 
 if method_label == "K-Means":
     m = Methode.KMEANS
@@ -55,7 +57,7 @@ min_year = int(df["date_taken"].dt.year.min())
 max_year = int(df["date_taken"].dt.year.max())
 
 start_year, end_year = st.slider(
-    "Year range",
+    "Années de prise de vue",
     min_value=min_year,
     max_value=max_year,
     value=(2005, 2010),
@@ -79,7 +81,7 @@ df_small = df.loc[small.index].copy()
 match m:
     case Methode.KMEANS:
         if data == "Reduit":
-            df_map = clustering_kmeans.kmeans(df_small, small, k)   
+            df_map = clustering_kmeans.kmeans(df_small, small, k)
         elif data == "Entier":
             df_map = clustering_kmeans.kmeans(df, data_df, k)
     case Methode.AGGLO:
@@ -90,7 +92,7 @@ match m:
         print("erreur")
 
 if (not(df_map.empty) and calcul_tags):
-    cluster_tags = top_word(df_map)
+    cluster_tags = top_words(df_map, text_mining_method_label, 3)
 
 palette = [
     [255, 0, 0],    
@@ -108,25 +110,32 @@ palette = [
 df_map["color"] = df_map["cluster"].apply(
     lambda c: palette[int(c) % len(palette)] if int(c) >= 0 else [0, 0, 0]
 )
+
 if calcul_tags:
     df_map["top_tags"] = df_map["cluster"].apply(
         lambda c: ", ".join(cluster_tags[c]) if c in cluster_tags else ""
     )
 
-    layer = pdk.Layer(
-        "ScatterplotLayer",
-        data=df_map,
-        get_position="[long, lat]",
-        get_fill_color="color",
-        get_radius=25,          
-        pickable=True,
-        opacity=0.7
-    )
+    print("## DEBUG: tags calculés ##")
+    print(df_map[["cluster", "top_tags"]].drop_duplicates().head())
 
-    view_state = pdk.ViewState(
-        latitude=float(df_map["lat"].mean()),
-        longitude=float(df_map["long"].mean()),
-        zoom=12
-    )
+layer = pdk.Layer(
+    "ScatterplotLayer",
+    data=df_map,
+    get_position="[long, lat]",
+    get_fill_color="color",
+    get_radius=25,
+    pickable=True,
+    opacity=0.7
+)
 
+view_state = pdk.ViewState(
+    latitude=float(df_map["lat"].mean()),
+    longitude=float(df_map["long"].mean()),
+    zoom=12
+)
+
+if calcul_tags:
     st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state, tooltip={"text": "{top_tags}"}))
+else:
+    st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state))
